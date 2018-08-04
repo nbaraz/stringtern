@@ -83,7 +83,7 @@ static void bytevec_free(struct bytevec *bv)
 
 
 struct hash_entry {
-    uint16_t string;
+    uint16_t string; // offset in the backing storage
     uint16_t hash_value;
 }
 
@@ -107,27 +107,29 @@ static struct hash_entry *hash_fetch(struct intern_hash *ih, uint32_t index)
 
 static void hash_insert_internal(struct intern_hash *ih, struct hash_entry entry)
 {
-    struct hash_entry *backing_array = ih->backing_array;
+    uint16_t travelled = 0;
 
-    // while (0 != backing_array[entry.hash_value].string) {}
-    if (0 == backing_array[entry.hash_value].string) {
-        backing_array[entry.hash_value] = entry;
-        return;
-    }
+    while (true)
+    {
+        uint16_t hash_value = entry.hash_value;
+        uint16_t index = ((uint32_t)hash_value + (uint32_t)travelled) % ih->cap;
+        struct hash_entry *insetrtion_slot = &ih->backing_array[index];
 
-    uint16_t distance = 1;
-    while (true) {
-        uint16_t index = ((uint32_t)entry.hash_value + (uint32_t)distance) % ih->cap;
-        struct hash_entry *current = &backing_array[index];
-        if (0 == current->string) {
-            *current = entry;
+        // Doesn't support deletion.
+        if (0 == insetrtion_slot->string)
+        {
+            *insetrtion_slot = entry;
             break;
         }
 
-        uint32_t current_dib = (ih->cap + index - current->hash_value) % ih->cap;
-        if (distance > current_dib) {
-            entry = hash_entry_replace(current, entry);
-            distance = current_dib + 1;
+        uint32_t insetrtion_slot_dib = (ih->cap + index - insetrtion_slot->hash_value) % ih->cap;
+
+        if (travelled > insetrtion_slot_dib) {
+            entry = hash_entry_replace(insetrtion_slot, entry);
+            travelled = insetrtion_slot_dib + 1;
+        }
+        else {
+            travelled += 1;
         }
     }
 }
